@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 使用量ダッシュボード</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ─── CC for Business デザインシステム（ダーク版） ─── */
+:root {
+  --cc-bg-base: #110e0a;
+  --cc-bg-overlay: rgba(230, 126, 34, 0.03);
+  --cc-text-main: #ede0d4;
+  --cc-text-muted: #8e6d6b;
+  --cc-accent: #e67e22;
+  --cc-secondary-accent: #ff7f50;
+  --cc-golden: #f39c12;
+  --cc-ease-fluid: cubic-bezier(0.2, 0.0, 0.2, 1);
+  --cc-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  --cc-font-mono: 'SF Mono', 'Menlo', 'Consolas', monospace;
+
+  --card-bg: rgba(30, 22, 16, 0.5);
+  --card-border: rgba(142, 109, 107, 0.12);
+  --card-border-hover: rgba(230, 126, 34, 0.3);
+  --input-bg: rgba(20, 14, 10, 0.5);
+
+  --opus: #e67e22;
+  --sonnet: #6eb5ff;
+  --haiku: #4ade80;
+}
+
+[data-theme="light"] {
+  --cc-bg-base: #fdf2e9;
+  --cc-bg-overlay: rgba(230, 126, 34, 0.05);
+  --cc-text-main: #4a2c2a;
+  --cc-text-muted: #8e6d6b;
+  --card-bg: rgba(253, 242, 233, 0.45);
+  --card-border: rgba(142, 109, 107, 0.15);
+  --input-bg: rgba(253, 242, 233, 0.6);
+}
+
+/* ─── リセット ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--cc-font-sans);
+  background-color: var(--cc-bg-base);
+  color: var(--cc-text-main);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.8;
+  min-height: 100vh;
+}
+
+/* ─── ノイズオーバーレイ（CC for Business完全再現） ─── */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  mix-blend-mode: overlay;
+  filter: contrast(120%);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* ─── ヘッダー（.cc-header-page再現） ─── */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 2rem 4rem;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.header::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 4rem;
+  right: 4rem;
+  height: 1px;
+  background: var(--card-border);
+}
+.header-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  white-space: nowrap;
+  line-height: 1;
+}
+.header-title .logo-main {
+  font-family: var(--cc-font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cc-accent);
+  text-shadow: 0 0 20px rgba(230, 126, 34, 0.3);
+}
+.header-title .logo-sep {
+  width: 1px;
+  height: 1rem;
+  background: var(--card-border);
+  margin: 0 1rem;
+  align-self: center;
+}
+.header-title .logo-sub {
+  font-family: var(--cc-font-mono);
+  font-size: 0.55rem;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cc-text-muted);
+}
+.header-spacer { flex: 1; }
+.header-controls { display: flex; align-items: center; gap: 0.6rem; }
+
+/* ─── ボタン（.cc-btn再現） ─── */
+.btn {
+  font-family: var(--cc-font-mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.7rem 1.4rem;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--cc-text-muted);
+  cursor: pointer;
+  transition: all 0.5s var(--cc-ease-fluid);
+  position: relative;
+  overflow: hidden;
+}
+.btn:hover {
+  color: var(--cc-text-main);
+  border-color: var(--card-border-hover);
+  transform: translateY(-2px);
+  text-shadow: 0 0 8px rgba(230, 126, 34, 0.4);
+}
+.btn.active {
+  background: rgba(230, 126, 34, 0.2);
+  border-color: rgba(230, 126, 34, 0.4);
+  color: var(--cc-accent);
+}
+.btn-group { display: flex; }
+.btn-group .btn { border-radius: 0; margin-left: -1px; position: relative; }
+.btn-group .btn:first-child { margin-left: 0; }
+.btn-group .btn.active { z-index: 1; }
+.btn-group .btn:hover { z-index: 2; }
+
+/* ─── メイン ─── */
+.main {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 3rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+/* ─── カード ─── */
+.card {
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--card-border);
+  position: relative;
+  overflow: hidden;
+}
+.card-header {
+  padding: 2rem 2.5rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card-header span {
+  font-family: var(--cc-font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--cc-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+.card-body { padding: 0 2.5rem 2.5rem; }
+
+/* ─── サマリーカード ─── */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+.summary-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--card-border);
+  padding: 2.5rem;
+}
+.summary-label {
+  font-family: var(--cc-font-sans);
+  font-size: 0.7rem;
+  color: var(--cc-text-muted);
+  letter-spacing: 0.02em;
+}
+.summary-hint {
+  display: block;
+  font-size: 0.55rem;
+  opacity: 0.6;
+  margin-top: 0.2rem;
+  letter-spacing: 0;
+}
+.summary-value {
+  font-family: var(--cc-font-sans);
+  font-size: 2.8rem;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  margin: 0.5rem 0;
+  line-height: 1;
+  color: var(--cc-text-main);
+}
+.summary-sub {
+  font-family: var(--cc-font-mono);
+  font-size: 0.6rem;
+  color: var(--cc-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.summary-sub .up { color: var(--cc-secondary-accent); }
+.summary-sub .down { color: var(--haiku); }
+
+/* ─── チャート ─── */
+.chart-container { position: relative; width: 100%; height: 320px; }
+.chart-legend {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  padding-top: 1.2rem;
+}
+.chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  transition: all 0.25s var(--cc-ease-fluid);
+  user-select: none;
+}
+.chart-legend-item:hover {
+  border-color: var(--card-border-hover);
+  background: rgba(230, 126, 34, 0.06);
+}
+.chart-legend-item.dimmed { opacity: 0.35; }
+.chart-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.chart-legend-label {
+  font-family: var(--cc-font-mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cc-text-muted);
+}
+.chart-legend-value {
+  font-family: var(--cc-font-mono);
+  font-size: 0.6rem;
+  color: var(--cc-text-muted);
+  opacity: 0.7;
+}
+.chart-legend-item:hover .chart-legend-label { color: var(--cc-text-main); }
+.chart-legend-item:hover .chart-legend-value { opacity: 1; }
+
+/* ─── 2カラム ─── */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 2rem;
+}
+.two-col-equal { grid-template-columns: 1fr 1fr; }
+@media (max-width: 900px) { .two-col, .two-col-equal { grid-template-columns: 1fr; } }
+
+/* ─── ドーナツ＋時間帯チャート ─── */
+.donut-wrap { position: relative; width: 100%; max-width: 280px; margin: 0 auto; }
+.hourly-wrap { position: relative; width: 100%; height: 280px; }
+
+/* ─── キャッシュ効率バー ─── */
+.cache-bar-container { display: flex; gap: 0; height: 24px; border-radius: 4px; overflow: hidden; margin-bottom: 0.8rem; }
+.cache-bar-segment { display: flex; align-items: center; justify-content: center; font-family: var(--cc-font-mono); font-size: 0.55rem; font-weight: 600; color: var(--cc-bg-base); white-space: nowrap; overflow: hidden; min-width: 0; }
+.cache-bar-labels { display: flex; gap: 1.5rem; font-family: var(--cc-font-mono); font-size: 0.6rem; color: var(--cc-text-muted); flex-wrap: wrap; }
+
+/* ─── プロジェクト一覧 ─── */
+.project-list { list-style: none; }
+.project-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.project-item:last-child { border-bottom: none; }
+.project-rank {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--cc-font-sans);
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--cc-accent);
+  flex-shrink: 0;
+}
+.project-info { flex: 1; min-width: 0; }
+.project-name {
+  font-family: var(--cc-font-sans);
+  font-size: 1rem;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-meta {
+  font-family: var(--cc-font-mono);
+  font-size: 0.6rem;
+  color: var(--cc-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.project-bar-wrap {
+  flex: 1;
+  max-width: 200px;
+  height: 6px;
+  background: rgba(230, 126, 34, 0.08);
+  overflow: hidden;
+  flex-shrink: 0;
+  border-radius: 3px;
+}
+.project-cost {
+  font-family: var(--cc-font-sans);
+  font-size: 1.1rem;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--cc-accent);
+  min-width: 70px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ─── Tips ─── */
+.tips-list { display: flex; flex-direction: column; gap: 1rem; }
+.tip-card {
+  padding: 1.5rem;
+  border: 1px solid var(--card-border);
+}
+.tip-title {
+  font-family: var(--cc-font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.5rem;
+}
+.tip-body {
+  font-family: var(--cc-font-mono);
+  font-size: 0.68rem;
+  color: var(--cc-text-muted);
+  line-height: 1.8;
+}
+.tip-link {
+  display: inline-block;
+  margin-top: 0.8rem;
+  font-family: var(--cc-font-mono);
+  font-size: 0.6rem;
+  color: var(--cc-accent);
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition: text-shadow 0.3s;
+}
+.tip-link:hover { text-shadow: 0 0 8px rgba(230, 126, 34, 0.4); }
+
+/* ─── セッション振り返り ─── */
+.session-date-nav { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.session-count-badge {
+  font-family: var(--cc-font-mono);
+  font-size: 0.55rem;
+  color: var(--cc-accent);
+  padding: 0.2em 0.6em;
+  border: 1px solid rgba(230, 126, 34, 0.3);
+  border-radius: 4px;
+}
+.session-date-nav input {
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--card-border);
+  background: var(--input-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--cc-text-main);
+  font-family: var(--cc-font-mono);
+  font-size: 0.7rem;
+}
+.session-list { display: flex; flex-direction: column; gap: 1.2rem; }
+.session-card {
+  border: 1px solid var(--card-border);
+  overflow: hidden;
+}
+.session-header {
+  padding: 1.2rem 1.5rem;
+  background: rgba(230, 126, 34, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  cursor: pointer;
+  transition: background 0.3s var(--cc-ease-fluid);
+}
+.session-header:hover { background: rgba(230, 126, 34, 0.08); }
+.session-time {
+  font-family: var(--cc-font-sans);
+  font-size: 1rem;
+  font-weight: 400;
+}
+.session-project {
+  font-family: var(--cc-font-mono);
+  font-size: 0.55rem;
+  padding: 0.2em 0.6em;
+  background: rgba(230, 126, 34, 0.15);
+  border: 1px solid rgba(230, 126, 34, 0.2);
+  color: var(--cc-accent);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.session-model {
+  font-family: var(--cc-font-mono);
+  font-size: 0.5rem;
+  padding: 0.2em 0.6em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.session-model.opus { background: var(--opus); color: var(--cc-bg-base); }
+.session-model.sonnet { background: var(--sonnet); color: var(--cc-bg-base); }
+.session-model.haiku { background: var(--haiku); color: var(--cc-bg-base); }
+.session-stats {
+  font-family: var(--cc-font-mono);
+  font-size: 0.6rem;
+  color: var(--cc-text-muted);
+  margin-left: auto;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.session-preview {
+  font-family: var(--cc-font-mono);
+  font-size: 0.55rem;
+  color: var(--cc-text-muted);
+  opacity: 0.6;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-cost {
+  font-family: var(--cc-font-sans);
+  font-size: 1.1rem;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--cc-accent);
+}
+.session-prompts {
+  padding: 0 1.5rem;
+  border-top: 1px solid var(--card-border);
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s var(--cc-ease-fluid), padding 0.4s var(--cc-ease-fluid);
+}
+.session-prompts.open { max-height: 3000px; padding: 1.2rem 1.5rem; }
+.prompt-item {
+  display: flex;
+  gap: 0.8rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid rgba(142, 109, 107, 0.08);
+  font-family: var(--cc-font-mono);
+  font-size: 0.72rem;
+  line-height: 1.8;
+}
+.prompt-item:last-child { border-bottom: none; }
+.prompt-num {
+  color: var(--cc-accent);
+  font-size: 0.6rem;
+  min-width: 1.5rem;
+  flex-shrink: 0;
+  letter-spacing: 0.1em;
+}
+.prompt-time {
+  color: var(--cc-text-muted);
+  font-size: 0.6rem;
+  min-width: 3rem;
+  flex-shrink: 0;
+}
+.prompt-text { color: var(--cc-text-main); word-break: break-word; }
+.prompt-more {
+  padding: 0.8rem 0;
+  font-size: 0.6rem;
+  color: var(--cc-accent);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  transition: text-shadow 0.3s;
+}
+.prompt-more:hover { text-shadow: 0 0 8px rgba(230, 126, 34, 0.4); }
+
+/* ─── インフォバー ─── */
+.info-bar {
+  position: relative;
+  z-index: 99;
+  padding: 0.5rem 4rem;
+  font-family: var(--cc-font-mono);
+  font-size: 0.6rem;
+  color: var(--cc-text-muted);
+  letter-spacing: 0.1em;
+  background: var(--cc-bg-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--card-border);
+}
+
+/* ─── モーダル ─── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s var(--cc-ease-fluid);
+}
+.modal-overlay.visible { opacity: 1; visibility: visible; }
+.modal {
+  background: var(--cc-bg-base);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--card-border);
+  padding: 3rem;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: 0 0 48px rgba(230, 126, 34, 0.1);
+}
+.modal h2 {
+  font-family: var(--cc-font-sans);
+  font-size: 1.6rem;
+  font-weight: 400;
+  margin-bottom: 0.5rem;
+}
+.modal p {
+  font-family: var(--cc-font-mono);
+  font-size: 0.72rem;
+  color: var(--cc-text-muted);
+  margin-bottom: 2rem;
+  line-height: 1.8;
+}
+.plan-options { display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 2rem; }
+.plan-option {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem 1.5rem;
+  border: 1px solid var(--card-border);
+  cursor: pointer;
+  transition: all 0.5s var(--cc-ease-fluid);
+}
+.plan-option:hover { border-color: var(--card-border-hover); }
+.plan-option.selected {
+  border-color: rgba(230, 126, 34, 0.4);
+  background: rgba(230, 126, 34, 0.08);
+  box-shadow: 0 0 24px rgba(230, 126, 34, 0.1);
+}
+.plan-option input { display: none; }
+.plan-radio {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--cc-text-muted);
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.plan-option.selected .plan-radio { border-color: var(--cc-accent); }
+.plan-option.selected .plan-radio::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cc-accent);
+}
+.plan-info-wrap { flex: 1; }
+.plan-name {
+  font-family: var(--cc-font-sans);
+  font-size: 1.1rem;
+  font-weight: 400;
+}
+.plan-desc {
+  font-family: var(--cc-font-mono);
+  font-size: 0.55rem;
+  color: var(--cc-text-muted);
+  margin-top: 0.2rem;
+}
+.plan-price {
+  font-family: var(--cc-font-mono);
+  font-size: 0.6rem;
+  color: var(--cc-text-muted);
+  margin-left: auto;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.modal-btn {
+  width: 100%;
+  padding: 1.2rem 2.5rem;
+  background: rgba(230, 126, 34, 0.3);
+  border: 1px solid rgba(230, 126, 34, 0.4);
+  color: var(--cc-accent);
+  font-family: var(--cc-font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.5s var(--cc-ease-fluid);
+}
+.modal-btn:hover {
+  background: rgba(230, 126, 34, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 0 24px rgba(230, 126, 34, 0.25), 0 0 48px rgba(230, 126, 34, 0.1);
+}
+
+/* ─── フッター ─── */
+
+/* ─── トースト通知 ─── */
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(230, 126, 34, 0.3);
+  padding: 1rem 2rem;
+  font-family: var(--cc-font-mono);
+  font-size: 0.65rem;
+  color: var(--cc-accent);
+  z-index: 300;
+  opacity: 0;
+  transition: all 0.4s var(--cc-ease-fluid);
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ─── 状態 ─── */
+.loading, .empty {
+  text-align: center;
+  padding: 3rem;
+  font-family: var(--cc-font-mono);
+  font-size: 0.65rem;
+  color: var(--cc-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+/* ─── アニメーション ─── */
+@keyframes ccFadeIn {
+  from { opacity: 0; filter: blur(4px); transform: translateY(12px); }
+  to { opacity: 1; filter: blur(0); transform: translateY(0); }
+}
+.summary-card { animation: ccFadeIn 0.6s var(--cc-ease-fluid) backwards; }
+.summary-card:nth-child(1) { animation-delay: 0.05s; }
+.summary-card:nth-child(2) { animation-delay: 0.1s; }
+.summary-card:nth-child(3) { animation-delay: 0.15s; }
+.summary-card:nth-child(4) { animation-delay: 0.2s; }
+.summary-card:nth-child(5) { animation-delay: 0.25s; }
+.summary-card:nth-child(6) { animation-delay: 0.3s; }
+
+/* ─── ステータスドット（cc-status-dot再現） ─── */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cc-accent);
+  display: inline-block;
+  animation: ccPulse 2s infinite;
+}
+@keyframes ccPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ─── レスポンシブ ─── */
+@media (max-width: 768px) {
+  .header { padding: 1.2rem 1.5rem; }
+  .header::after { left: 1.5rem; right: 1.5rem; }
+  .main { padding: 1.5rem; gap: 2rem; }
+  .summary-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+  .summary-card { padding: 1.5rem; }
+  .summary-value { font-size: 2rem; }
+  .card-header { padding: 1.5rem 1.5rem 0.8rem; }
+  .card-body { padding: 0 1.5rem 1.5rem; }
+  .info-bar { padding: 0.5rem 1.5rem; }
+}
+</style>
+</head>
+<body data-theme="dark" data-mode="advanced">
+
+<!-- ヘッダー -->
+<header class="header">
+  <div class="header-title">
+    <span class="logo-main">Claude Code</span>
+    <span class="logo-sep"></span>
+    <span class="logo-sub">Usage Dashboard</span>
+  </div>
+  <div class="btn-group" id="rangeBtns">
+    <button class="btn" data-range="7">7日</button>
+    <button class="btn active" data-range="30">30日</button>
+    <button class="btn" data-range="90">90日</button>
+    <button class="btn" data-range="all">全期間</button>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-controls">
+    <button class="btn" id="themeToggle">&#9790;</button>
+    <button class="btn" id="settingsBtn">&#9881;</button>
+  </div>
+</header>
+
+<!-- インフォバー -->
+<div class="info-bar">
+  <span id="footerScan">最終スキャン: --</span>
+  <button class="btn" id="rescanBtn" style="font-size:0.55rem;padding:0.3rem 0.7rem;">再スキャン</button>
+  <span id="footerStats">--</span>
+</div>
+
+<!-- メイン -->
+<main class="main">
+  <div class="summary-grid" id="summaryGrid">
+    <div class="summary-card">
+      <div class="summary-label">プラン活用度<span class="summary-hint">サブスク料金に対するAPI換算値</span></div>
+      <div class="summary-value" id="sumPlan">--</div>
+      <div class="summary-sub" id="sumPlanSub"></div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label" id="sumOutputLabel">出力トークン<span class="summary-hint">AIが生成したテキスト量</span></div>
+      <div class="summary-value" id="sumOutput">--</div>
+      <div class="summary-sub" id="sumOutputSub"></div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label" id="sumInputLabel">入力トークン<span class="summary-hint">送信したプロンプト＋コンテキスト</span></div>
+      <div class="summary-value" id="sumInput">--</div>
+      <div class="summary-sub" id="sumInputSub"></div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">セッション数<span class="summary-hint">Claude Codeを起動した回数</span></div>
+      <div class="summary-value" id="sumSessions">--</div>
+      <div class="summary-sub" id="sumSessionsSub"></div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">サブエージェント率<span class="summary-hint">自動で並列実行されたタスクの割合</span></div>
+      <div class="summary-value" id="sumSubagent">--</div>
+      <div class="summary-sub" id="sumSubagentSub"></div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">キャッシュ効率<span class="summary-hint">コンテキストの再利用率</span></div>
+      <div class="summary-value" id="sumCache">--</div>
+      <div class="summary-sub" id="sumCacheSub"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span>日別トークン使用量</span>
+      <div class="btn-group" id="chartTabs">
+        <button class="btn active" data-tab="output">出力トークン</button>
+        <button class="btn" data-tab="input">入力トークン</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+      <div class="chart-legend" id="chartLegend"></div>
+    </div>
+  </div>
+
+  <!-- モデル別割合 + 時間帯 -->
+  <div class="two-col two-col-equal">
+    <div class="card">
+      <div class="card-header"><span>モデル別割合</span></div>
+      <div class="card-body">
+        <div class="donut-wrap"><canvas id="donutChart"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span>時間帯別アクティビティ</span></div>
+      <div class="card-body">
+        <div class="hourly-wrap"><canvas id="hourlyChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- プロジェクト別（フルワイド） -->
+  <div class="card">
+    <div class="card-header"><span>プロジェクト別</span></div>
+    <div class="card-body">
+      <ul class="project-list" id="projectList"><li class="loading">読み込み中...</li></ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span>セッション振り返り</span>
+      <div class="session-date-nav">
+        <button class="btn" id="prevDay" style="padding:0.4rem 0.8rem;font-size:0.55rem;">← 前日</button>
+        <input type="date" id="sessionDate" />
+        <button class="btn" id="nextDay" style="padding:0.4rem 0.8rem;font-size:0.55rem;">翌日 →</button>
+        <button class="btn" id="todayBtn" style="padding:0.4rem 0.8rem;font-size:0.55rem;">今日</button>
+        <span class="session-count-badge" id="sessionCountBadge"></span>
+      </div>
+    </div>
+    <div class="card-body">
+      <p style="font-size:0.65rem;color:var(--cc-text-muted);margin-bottom:1rem;line-height:1.6;">日付を選んで、その日のセッション一覧とプロンプト履歴を確認。行をクリックで展開。</p>
+      <div class="session-list" id="sessionList"><div class="loading">読み込み中...</div></div>
+    </div>
+  </div>
+
+  <!-- キャッシュ効率 -->
+  <div class="card">
+    <div class="card-header"><span>キャッシュ効率</span></div>
+    <div class="card-body">
+      <p style="font-size:0.65rem;color:var(--cc-text-muted);margin-bottom:1rem;line-height:1.6;">Claude Codeは会話のコンテキストをキャッシュして再利用します。キャッシュ読取が多いほど、コスト効率が高いことを意味します。</p>
+      <div class="cache-bar-wrap" id="cacheBar"></div>
+    </div>
+  </div>
+
+  <!-- 活用Tips -->
+  <div class="card">
+    <div class="card-header"><span>活用ヒント</span></div>
+    <div class="card-body">
+      <div class="tips-list" id="tipsList"></div>
+    </div>
+  </div>
+
+</main>
+
+
+<!-- プラン選択モーダル -->
+<div class="modal-overlay" id="planModal">
+  <div class="modal">
+    <h2>プランを選択</h2>
+    <p>API換算コストとの比較に使います。あとから設定（⚙）で変更できます。</p>
+    <div class="plan-options" id="planOptions">
+      <label class="plan-option" data-plan="pro">
+        <div class="plan-radio"></div>
+        <div class="plan-info-wrap"><div class="plan-name">Pro</div><div class="plan-desc">Sonnet中心の基本プラン</div></div>
+        <div class="plan-price">月額 $20</div>
+      </label>
+      <label class="plan-option selected" data-plan="max_5x">
+        <div class="plan-radio"></div>
+        <div class="plan-info-wrap"><div class="plan-name">Max (5x)</div><div class="plan-desc">全モデル利用可、5倍の利用枠</div></div>
+        <div class="plan-price">月額 $100</div>
+      </label>
+      <label class="plan-option" data-plan="max_20x">
+        <div class="plan-radio"></div>
+        <div class="plan-info-wrap"><div class="plan-name">Max (20x)</div><div class="plan-desc">全モデル利用可、20倍の利用枠</div></div>
+        <div class="plan-price">月額 $200</div>
+      </label>
+    </div>
+    <button class="modal-btn" id="planSave">保存して開始</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function showToast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+let state = {
+  config: { plan: "max_5x", theme: "dark", mode: "advanced" },
+  range: 30,
+  chartTab: "output",
+  dailyData: null,
+  summaryData: null,
+};
+
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+const api = async (path, opts) => { const r = await fetch(path, opts); return r.json(); };
+
+function fmtNum(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
+  return n.toLocaleString();
+}
+function fmtTime(iso) {
+  if (!iso) return "--";
+  const d = new Date(iso);
+  return d.getHours().toString().padStart(2,"0") + ":" + d.getMinutes().toString().padStart(2,"0");
+}
+function modelShort(m) {
+  if (m.includes("opus")) return "Opus";
+  if (m.includes("sonnet")) return "Sonnet";
+  if (m.includes("haiku")) return "Haiku";
+  return m;
+}
+function modelClass(m) {
+  if (m.includes("opus")) return "opus";
+  if (m.includes("sonnet")) return "sonnet";
+  if (m.includes("haiku")) return "haiku";
+  return "";
+}
+function modelColor(m) {
+  const s = getComputedStyle(document.documentElement);
+  if (m.includes("opus")) return s.getPropertyValue("--opus").trim();
+  if (m.includes("sonnet")) return s.getPropertyValue("--sonnet").trim();
+  if (m.includes("haiku")) return s.getPropertyValue("--haiku").trim();
+  return "#888";
+}
+function getDateRange() {
+  const now = new Date();
+  const to = now.toISOString().slice(0, 10);
+  if (state.range === "all") return { from: "2000-01-01", to };
+  return { from: new Date(now - state.range * 86400000).toISOString().slice(0, 10), to };
+}
+
+async function loadAll() {
+  const { from, to } = getDateRange();
+  const [daily, projects, summary, config, tips, hourly] = await Promise.all([
+    api(`/api/daily?from=${from}&to=${to}`),
+    api(`/api/projects?from=${from}&to=${to}`),
+    api("/api/summary?period=month"),
+    api("/api/config"),
+    api("/api/tips"),
+    api(`/api/hourly?from=${from}&to=${to}`),
+  ]);
+  state.config = config;
+  state.dailyData = daily;
+  state.summaryData = summary;
+  applyConfig();
+  renderSummary(summary);
+  renderDailyChart(daily);
+  renderDonutChart(daily);
+  renderHourlyChart(hourly);
+  renderCacheBar(summary);
+  renderProjects(projects);
+  renderTips(tips);
+  loadSessions();
+  updateFooter(summary);
+}
+
+function applyConfig() {
+  document.body.dataset.theme = state.config.theme || "dark";
+  document.body.dataset.mode = "advanced";
+  $("#themeToggle").innerHTML = state.config.theme === "dark" ? "&#9728;" : "&#9790;";
+}
+
+function renderSummary(data) {
+  const c = data.current, p = data.previous;
+
+  // プラン活用度
+  const pi = c.plan_info;
+  if (pi) {
+    $("#sumPlan").textContent = pi.savings_ratio > 0 ? pi.savings_ratio.toFixed(1) + "x" : "--";
+    const names = { pro: "Pro", max_5x: "Max 5x", max_20x: "Max 20x" };
+    $("#sumPlanSub").textContent = `${names[pi.plan]}（月額$${pi.monthly_price}）で API換算 $${pi.equivalent_api_cost.toFixed(0)} 分を利用`;
+  }
+
+  // 出力トークン
+  $("#sumOutput").textContent = fmtNum(c.total_output);
+  if (p.total_output > 0) {
+    const outPct = Math.round((c.total_output - p.total_output) / p.total_output * 100);
+    if (outPct !== 0) {
+      const cls = outPct > 0 ? "up" : "down";
+      $("#sumOutputSub").innerHTML = `<span class="${cls}">${outPct > 0 ? "+" : ""}${outPct}%</span> vs ${p.label}`;
+    } else {
+      $("#sumOutputSub").textContent = `→ ${p.label}と同水準`;
+    }
+  } else {
+    $("#sumOutputSub").textContent = `${p.label}: データなし`;
+  }
+
+  // 入力トークン
+  $("#sumInput").textContent = fmtNum(c.total_input);
+  if (p.total_input > 0) {
+    const inPct = Math.round((c.total_input - p.total_input) / p.total_input * 100);
+    if (inPct !== 0) {
+      const cls = inPct > 0 ? "up" : "down";
+      $("#sumInputSub").innerHTML = `<span class="${cls}">${inPct > 0 ? "+" : ""}${inPct}%</span> vs ${p.label}`;
+    } else {
+      $("#sumInputSub").textContent = `→ ${p.label}と同水準`;
+    }
+  } else {
+    $("#sumInputSub").textContent = `${p.label}: データなし`;
+  }
+
+  // セッション
+  $("#sumSessions").textContent = c.session_count;
+  $("#sumSessionsSub").textContent = `${c.turn_count.toLocaleString()} ターン`;
+
+  // サブエージェント率
+  const subTotal = (c.subagent_turns || 0) + (c.main_turns || 0);
+  const subRate = subTotal > 0 ? Math.round(c.subagent_turns / subTotal * 100) : 0;
+  $("#sumSubagent").textContent = subRate + "%";
+  $("#sumSubagentSub").textContent = `${(c.main_turns||0).toLocaleString()}ターン中 ${(c.subagent_turns||0).toLocaleString()}がサブエージェント`;
+
+  // キャッシュ効率
+  const cacheTotal = c.total_input + c.total_cache_read + c.total_cache_creation;
+  const cacheEff = cacheTotal > 0 ? (c.total_cache_read / cacheTotal * 100).toFixed(1) : 0;
+  $("#sumCache").textContent = cacheEff + "%";
+  $("#sumCacheSub").textContent = `読取 ${fmtNum(c.total_cache_read)} / 作成 ${fmtNum(c.total_cache_creation)} / 新規 ${fmtNum(c.total_input)}`;
+}
+
+let dailyChartInstance = null;
+function renderDailyChart(data) {
+  if (dailyChartInstance) dailyChartInstance.destroy();
+  const ctx = $("#dailyChart").getContext("2d");
+  const models = Object.keys(data.models);
+  const isDark = state.config.theme !== "light";
+  const gridColor = isDark ? "rgba(142, 109, 107, 0.1)" : "rgba(142, 109, 107, 0.15)";
+  const textColor = isDark ? "#8e6d6b" : "#8e6d6b";
+  const tab = state.chartTab;
+  const tokenKey = tab === "input" ? "input_tokens" : "output_tokens";
+  const tabLabel = tab === "input" ? "入力" : "出力";
+
+  dailyChartInstance = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: data.dates.map(d => { const [m,day] = d.slice(5).split('-'); return parseInt(m) + '/' + parseInt(day); }),
+      datasets: models.map(m => ({
+        label: modelShort(m),
+        data: data.models[m][tokenKey],
+        backgroundColor: modelColor(m) + "99",
+        borderColor: modelColor(m),
+        borderWidth: 1,
+        borderRadius: 2,
+      })),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 8, color: textColor, font: { family: "'Inter', sans-serif", size: 9 } }, border: { color: gridColor } },
+        y: { stacked: true, grid: { color: gridColor }, ticks: { color: textColor, font: { family: "'Inter', sans-serif", size: 9 }, callback: v => fmtNum(v) }, border: { color: gridColor } },
+      },
+      plugins: {
+        tooltip: {
+          backgroundColor: isDark ? "rgba(17, 14, 10, 0.95)" : "rgba(253, 242, 233, 0.95)",
+          titleColor: isDark ? "#ede0d4" : "#4a2c2a",
+          bodyColor: "#8e6d6b",
+          borderColor: "rgba(230, 126, 34, 0.2)",
+          borderWidth: 1,
+          titleFont: { family: "'Inter', sans-serif", size: 10 },
+          bodyFont: { family: "'Inter', sans-serif", size: 10 },
+          callbacks: {
+            title: items => { const d = data.dates[items[0].dataIndex]; const [m,day] = d.slice(5).split('-'); return `${parseInt(m)}月${parseInt(day)}日`; },
+            label: item => {
+              const total = models.reduce((s, m) => s + (data.models[m][tokenKey][item.dataIndex] || 0), 0);
+              const pct = total > 0 ? Math.round(item.parsed.y / total * 100) : 0;
+              return ` ${item.dataset.label}: ${fmtNum(item.parsed.y)} トークン (${pct}%)`;
+            },
+            footer: items => `合計: ${fmtNum(items.reduce((s, i) => s + i.parsed.y, 0))} トークン`,
+          },
+        },
+        legend: { display: false },
+      },
+    },
+  });
+
+  // カスタム凡例
+  const legend = $("#chartLegend");
+  legend.innerHTML = models.map((m, i) => {
+    const vals = data.models[m][tokenKey];
+    const total = vals.reduce((a, b) => a + b, 0);
+    const valStr = fmtNum(total);
+    return `
+    <div class="chart-legend-item" data-index="${i}">
+      <div class="chart-legend-dot" style="background:${modelColor(m)}"></div>
+      <span class="chart-legend-label">${modelShort(m)}</span>
+      <span class="chart-legend-value">${valStr}</span>
+    </div>`;
+  }).join("");
+
+  legend.querySelectorAll(".chart-legend-item").forEach(el => {
+    el.addEventListener("click", () => {
+      const idx = parseInt(el.dataset.index);
+      const meta = dailyChartInstance.getDatasetMeta(idx);
+      meta.hidden = !meta.hidden;
+      el.classList.toggle("dimmed", meta.hidden);
+      dailyChartInstance.update();
+    });
+  });
+}
+
+let donutChartInstance = null;
+function renderDonutChart(daily) {
+  if (donutChartInstance) donutChartInstance.destroy();
+  const ctx = $("#donutChart").getContext("2d");
+  const models = Object.keys(daily.models);
+  const totals = models.map(m => daily.models[m].output_tokens.reduce((a,b) => a+b, 0));
+  const grandTotal = totals.reduce((a,b) => a+b, 0);
+
+  donutChartInstance = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: models.map(modelShort),
+      datasets: [{ data: totals, backgroundColor: models.map(m => modelColor(m) + "cc"), borderColor: "transparent", borderWidth: 0 }],
+    },
+    options: {
+      cutout: "65%",
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: item => {
+              const pct = grandTotal > 0 ? Math.round(item.raw / grandTotal * 100) : 0;
+              return ` ${item.label}: ${fmtNum(item.raw)} トークン (${pct}%)`;
+            },
+          },
+        },
+      },
+    },
+    plugins: [{
+      id: "centerText",
+      afterDraw(chart) {
+        const { ctx, chartArea: { width, height, top, left } } = chart;
+        ctx.save();
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const cx = left + width / 2, cy = top + height / 2;
+        ctx.font = "600 1.2rem Inter, sans-serif";
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--cc-text-main").trim();
+        ctx.fillText(fmtNum(grandTotal), cx, cy - 6);
+        ctx.font = "0.55rem Inter, sans-serif";
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--cc-text-muted").trim();
+        ctx.fillText("出力トークン", cx, cy + 14);
+        ctx.restore();
+      },
+    }],
+  });
+}
+
+let hourlyChartInstance = null;
+function renderHourlyChart(data) {
+  if (hourlyChartInstance) hourlyChartInstance.destroy();
+  const ctx = $("#hourlyChart").getContext("2d");
+  const hours = data.hours || [];
+  const maxTurns = Math.max(...hours.map(h => h.turn_count), 1);
+  const isDark = state.config.theme !== "light";
+
+  hourlyChartInstance = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: hours.map(h => h.hour + "時"),
+      datasets: [{
+        data: hours.map(h => h.turn_count),
+        backgroundColor: hours.map(h => {
+          const intensity = h.turn_count / maxTurns;
+          return `rgba(230, 126, 34, ${0.15 + intensity * 0.7})`;
+        }),
+        borderRadius: 2,
+      }],
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { grid: { color: isDark ? "rgba(142,109,107,0.1)" : "rgba(142,109,107,0.15)" }, ticks: { color: "#8e6d6b", font: { size: 8 } }, border: { color: isDark ? "rgba(142,109,107,0.1)" : "rgba(142,109,107,0.15)" } },
+        y: { grid: { display: false }, ticks: { color: "#8e6d6b", font: { size: 8, family: "'Inter', sans-serif" } }, border: { display: false } },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: item => ` ${item.parsed.x} ターン` } },
+      },
+    },
+  });
+}
+
+function renderCacheBar(summary) {
+  const c = summary.current;
+  const total = c.total_input + c.total_cache_read + c.total_cache_creation;
+  if (total === 0) { $("#cacheBar").innerHTML = '<div class="empty">データがありません</div>'; return; }
+  const readPct = (c.total_cache_read / total * 100).toFixed(1);
+  const createPct = (c.total_cache_creation / total * 100).toFixed(1);
+  const inputPct = (c.total_input / total * 100).toFixed(1);
+  $("#cacheBar").innerHTML = `
+    <div class="cache-bar-container">
+      <div class="cache-bar-segment" style="width:${readPct}%;background:var(--haiku);">${readPct > 10 ? readPct + '%' : ''}</div>
+      <div class="cache-bar-segment" style="width:${createPct}%;background:var(--sonnet);">${createPct > 5 ? createPct + '%' : ''}</div>
+      <div class="cache-bar-segment" style="width:${inputPct}%;background:var(--opus);">${inputPct > 5 ? inputPct + '%' : ''}</div>
+    </div>
+    <div class="cache-bar-labels">
+      <span style="color:var(--haiku);">● キャッシュ読取: ${fmtNum(c.total_cache_read)} (${readPct}%)</span>
+      <span style="color:var(--sonnet);">● キャッシュ作成: ${fmtNum(c.total_cache_creation)} (${createPct}%)</span>
+      <span style="color:var(--opus);">● 新規入力: ${fmtNum(c.total_input)} (${inputPct}%)</span>
+    </div>`;
+}
+
+function renderProjects(data) {
+  const list = $("#projectList");
+  if (!data.projects.length) { list.innerHTML = '<li class="empty">データがありません</li>'; return; }
+  const maxOutput = Math.max(...data.projects.map(p => p.total_output), 1);
+  list.innerHTML = data.projects.map((p, i) => {
+    const bm = p.by_model || {};
+    const tot = p.total_output || 1;
+    const segments = Object.keys(bm).map(m => {
+      const pct = (bm[m] / tot * 100).toFixed(1);
+      return `<div style="width:${pct}%;background:${modelColor(m)};height:100%;opacity:0.7;" title="${modelShort(m)} ${pct}%"></div>`;
+    }).join("");
+    return `<li class="project-item">
+      <div class="project-rank">${i + 1}</div>
+      <div class="project-info">
+        <div class="project-name" title="${p.project_path}">${p.display_name}</div>
+        <div class="project-meta">${p.session_count} セッション / ${p.turn_count} ターン</div>
+      </div>
+      <div class="project-bar-wrap" style="width:${Math.max((p.total_output/maxOutput*100),3).toFixed(0)}%">
+        <div style="display:flex;height:100%;width:100%;">${segments}</div>
+      </div>
+      <div class="project-cost">${fmtNum(p.total_output)}</div>
+    </li>`;
+  }).join("");
+}
+
+function renderTips(tips) {
+  const c = $("#tipsList");
+  if (!tips.length) { c.innerHTML = '<div class="empty">ヒントがありません</div>'; return; }
+  c.innerHTML = tips.map(t => `
+    <div class="tip-card">
+      <div class="tip-title">${t.title}</div>
+      <div class="tip-body">${t.body}</div>
+      ${t.url ? `<a class="tip-link" href="${t.url}" target="_blank" rel="noopener">詳しく見る →</a>` : ""}
+    </div>`).join("");
+}
+
+async function loadSessions() {
+  const date = $("#sessionDate").value;
+  if (!date) return;
+  const data = await api(`/api/sessions?date=${date}`);
+  const list = $("#sessionList");
+  $("#sessionCountBadge").textContent = data.sessions.length + " セッション";
+  if (!data.sessions.length) { list.innerHTML = '<div class="empty">この日のセッションはありません</div>'; return; }
+  list.innerHTML = data.sessions.map((s, si) => {
+    const pr = s.prompts || [];
+    const show = pr.length;
+    const hide = 0;
+    const preview = pr.length > 0 ? escapeHtml(pr[0].content).slice(0,40) + (pr[0].content.length > 40 ? "…" : "") : "";
+    return `<div class="session-card">
+      <div class="session-header" onclick="toggleSession(this)">
+        <span class="session-time">${fmtTime(s.start_time)}${s.duration_minutes ? ` (${s.duration_minutes}分)` : ""}</span>
+        <span class="session-project">${s.project_display}</span>
+        <span class="session-model ${modelClass(s.primary_model||"")}">${modelShort(s.primary_model||"?")}</span>
+        <span class="session-stats">${s.turn_count} ターン</span>
+        <span class="session-cost">${fmtNum(s.total_output || 0)} tok</span>
+        ${preview ? `<span class="session-preview">${preview}</span>` : ""}
+      </div>
+      <div class="session-prompts" id="sp-${si}">
+        ${pr.slice(0,show).map((p,pi) => `<div class="prompt-item"><span class="prompt-num">${pi+1}</span><span class="prompt-time detail-only">${fmtTime(p.timestamp)}</span><span class="prompt-text">${escapeHtml(p.content)}</span></div>`).join("")}
+        ${hide > 0 ? `<div class="prompt-more" onclick="expandPrompts(this,${si},${JSON.stringify(pr.slice(show).map(p=>({t:p.timestamp,c:p.content}))).replace(/"/g,'&quot;')})">+ ${hide} more</div>` : ""}
+        ${pr.length === 0 ? '<div class="empty">プロンプトの記録なし</div>' : ""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function toggleSession(el) { el.nextElementSibling.classList.toggle("open"); }
+function expandPrompts(el, si, more) {
+  const n = el.parentElement.querySelectorAll(".prompt-item").length;
+  el.outerHTML = more.map((p,i) => `<div class="prompt-item"><span class="prompt-num">${n+i+1}</span><span class="prompt-time">${fmtTime(p.t)}</span><span class="prompt-text">${escapeHtml(p.c)}</span></div>`).join("");
+}
+function escapeHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+function updateFooter(s) {
+  const a = s.all_time;
+  $("#footerStats").textContent = `全期間: ${a.total_sessions} セッション / ${a.total_turns.toLocaleString()} ターン`;
+  $("#footerScan").textContent = `最終スキャン: ${new Date().toLocaleString("ja-JP")}`;
+}
+
+// Events
+$$("#rangeBtns .btn").forEach(b => b.addEventListener("click", () => {
+  $$("#rangeBtns .btn").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  state.range = b.dataset.range === "all" ? "all" : parseInt(b.dataset.range);
+  loadAll();
+}));
+$$("#chartTabs .btn").forEach(b => b.addEventListener("click", () => {
+  $$("#chartTabs .btn").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  state.chartTab = b.dataset.tab;
+  if (state.dailyData) renderDailyChart(state.dailyData);
+}));
+$("#themeToggle").addEventListener("click", async () => {
+  const t = state.config.theme === "dark" ? "light" : "dark";
+  state.config.theme = t;
+  await api("/api/config", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({theme:t}) });
+  applyConfig();
+  if (state.dailyData) renderDailyChart(state.dailyData);
+});
+$("#settingsBtn").addEventListener("click", () => showPlanModal());
+$("#sessionDate").addEventListener("change", loadSessions);
+function shiftDate(days) {
+  const d = new Date($("#sessionDate").value);
+  d.setDate(d.getDate() + days);
+  $("#sessionDate").value = d.toISOString().slice(0, 10);
+  loadSessions();
+}
+$("#prevDay").addEventListener("click", () => shiftDate(-1));
+$("#nextDay").addEventListener("click", () => shiftDate(1));
+$("#todayBtn").addEventListener("click", () => { $("#sessionDate").value = new Date().toISOString().slice(0, 10); loadSessions(); });
+$("#rescanBtn").addEventListener("click", async () => {
+  $("#rescanBtn").textContent = "スキャン中...";
+  $("#rescanBtn").disabled = true;
+  const r = await api("/api/rescan", { method: "POST" });
+  $("#rescanBtn").textContent = "再スキャン";
+  $("#rescanBtn").disabled = false;
+  showToast(`完了: ${r.scanned}ファイル処理 / ${r.new_turns}ターン追加 (${r.duration_ms}ms)`);
+  loadAll();
+});
+
+function showPlanModal() {
+  $("#planModal").classList.add("visible");
+  $$("#planOptions .plan-option").forEach(o => {
+    o.classList.toggle("selected", o.dataset.plan === state.config.plan);
+    o.onclick = () => { $$("#planOptions .plan-option").forEach(x => x.classList.remove("selected")); o.classList.add("selected"); };
+  });
+}
+$("#planSave").addEventListener("click", async () => {
+  const sel = $(".plan-option.selected");
+  if (!sel) return;
+  state.config.plan = sel.dataset.plan;
+  await api("/api/config", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({plan:sel.dataset.plan}) });
+  $("#planModal").classList.remove("visible");
+  loadAll();
+});
+$("#planModal").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("visible"); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("#planModal").classList.remove("visible"); });
+
+async function init() {
+  $("#sessionDate").value = new Date().toISOString().slice(0, 10);
+  const config = await api("/api/config");
+  state.config = config;
+  if (!config.theme) state.config.theme = "dark";
+  if (!config.plan || config.plan === "") showPlanModal();
+  applyConfig();
+  loadAll();
+}
+init();
+</script>
+</body>
+</html>
