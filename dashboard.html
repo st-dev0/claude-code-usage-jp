@@ -360,38 +360,6 @@ body::before {
   flex-shrink: 0;
 }
 
-/* ─── Tips ─── */
-.tips-list { display: flex; flex-direction: column; gap: 1rem; }
-.tip-card {
-  padding: 1.5rem;
-  border: 1px solid var(--card-border);
-}
-.tip-title {
-  font-family: var(--cc-font-mono);
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 0.5rem;
-}
-.tip-body {
-  font-family: var(--cc-font-mono);
-  font-size: 0.68rem;
-  color: var(--cc-text-muted);
-  line-height: 1.8;
-}
-.tip-link {
-  display: inline-block;
-  margin-top: 0.8rem;
-  font-family: var(--cc-font-mono);
-  font-size: 0.6rem;
-  color: var(--cc-accent);
-  text-decoration: none;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  transition: text-shadow 0.3s;
-}
-.tip-link:hover { text-shadow: 0 0 8px rgba(230, 126, 34, 0.4); }
 
 /* ─── セッション振り返り ─── */
 .session-date-nav { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
@@ -861,13 +829,6 @@ body::before {
     </div>
   </div>
 
-  <!-- 活用Tips -->
-  <div class="card">
-    <div class="card-header"><span>活用ヒント</span></div>
-    <div class="card-body">
-      <div class="tips-list" id="tipsList"></div>
-    </div>
-  </div>
 
 </main>
 
@@ -958,12 +919,11 @@ function getDateRange() {
 
 async function loadAll() {
   const { from, to } = getDateRange();
-  const [daily, projects, summary, config, tips, hourly] = await Promise.all([
+  const [daily, projects, summary, config, hourly] = await Promise.all([
     api(`/api/daily?from=${from}&to=${to}`),
     api(`/api/projects?from=${from}&to=${to}`),
     api("/api/summary?period=month"),
     api("/api/config"),
-    api("/api/tips"),
     api(`/api/hourly?from=${from}&to=${to}`),
   ]);
   state.config = config;
@@ -976,7 +936,6 @@ async function loadAll() {
   renderHourlyChart(hourly);
   renderCacheBar(summary);
   renderProjects(projects);
-  renderTips(tips);
   loadSessions();
   updateFooter(summary);
 }
@@ -1252,17 +1211,6 @@ function renderProjects(data) {
       <div class="project-cost">${fmtNum(p.total_output)}</div>
     </li>`;
   }).join("");
-}
-
-function renderTips(tips) {
-  const c = $("#tipsList");
-  if (!tips.length) { c.innerHTML = '<div class="empty">ヒントがありません</div>'; return; }
-  c.innerHTML = tips.map(t => `
-    <div class="tip-card">
-      <div class="tip-title">${t.title}</div>
-      <div class="tip-body">${t.body}</div>
-      ${t.url ? `<a class="tip-link" href="${t.url}" target="_blank" rel="noopener">詳しく見る →</a>` : ""}
-    </div>`).join("");
 }
 
 async function loadSessions() {
