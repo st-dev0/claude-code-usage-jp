@@ -15,7 +15,6 @@ from urllib.parse import urlparse, parse_qs
 from scanner import DB_PATH, init_db, scan, PRICING
 
 DASHBOARD_HTML = None  # 起動時にロード
-TIPS_DATA = None
 
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
@@ -35,17 +34,6 @@ def load_dashboard():
     html_path = Path(__file__).parent / "dashboard.html"
     with open(html_path, "r", encoding="utf-8") as f:
         DASHBOARD_HTML = f.read()
-
-
-def load_tips():
-    """tips.jsonをロード"""
-    global TIPS_DATA
-    tips_path = Path(__file__).parent / "tips.json"
-    if tips_path.exists():
-        with open(tips_path, "r", encoding="utf-8") as f:
-            TIPS_DATA = json.load(f)
-    else:
-        TIPS_DATA = []
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -90,8 +78,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._handle_config_get()
         elif path == "/api/hourly":
             self._handle_hourly(params)
-        elif path == "/api/tips":
-            self._send_json(TIPS_DATA or [])
         else:
             self._send_json({"error": "Not found"}, 404)
 
@@ -502,7 +488,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
 def start_server(port=8080):
     """サーバー起動"""
     load_dashboard()
-    load_tips()
 
     for p in range(port, port + 10):
         try:

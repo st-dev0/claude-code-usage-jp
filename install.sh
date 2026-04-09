@@ -21,7 +21,6 @@ cp "$SCRIPT_DIR/scanner.py" "$TOOL_DIR/"
 cp "$SCRIPT_DIR/server.py" "$TOOL_DIR/"
 cp "$SCRIPT_DIR/start.py" "$TOOL_DIR/"
 cp "$SCRIPT_DIR/dashboard.html" "$TOOL_DIR/"
-cp "$SCRIPT_DIR/tips.json" "$TOOL_DIR/"
 echo "   → $TOOL_DIR"
 
 # スラッシュコマンド作成
